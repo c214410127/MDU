@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>四層地牢 MUD 冒險</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Noto+Serif+TC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="ambient ambient-a"></div>
+  <div class="ambient ambient-b"></div>
+
+  <div class="app">
+    <header class="header">
+      <div class="header-ornament left"></div>
+      <div class="header-center">
+        <div class="header-emblem" aria-hidden="true">⚔</div>
+        <h1>四層地牢 MUD 冒險</h1>
+        <p class="subtitle">探索迷霧 · 擊敗魔王 · 成為傳說</p>
+        <div id="floor-badge" class="floor-badge">第 1 層 · 起始營地</div>
+      </div>
+      <div class="header-ornament right"></div>
+    </header>
+
+    <main class="game-layout">
+      <section class="panel log-panel">
+        <div class="panel-head">
+          <span class="panel-icon" aria-hidden="true">📜</span>
+          <h2>冒險日誌</h2>
+        </div>
+        <div id="log" class="log-content" aria-live="polite"></div>
+      </section>
+
+      <aside class="sidebar">
+        <section class="panel status-panel">
+          <div class="panel-head">
+            <span class="panel-icon" aria-hidden="true">🛡</span>
+            <h2>角色狀態</h2>
+          </div>
+
+          <div class="hp-block">
+            <div class="hp-header">
+              <span class="hp-label">生命值</span>
+              <span id="hp-text" class="hp-text">100 / 100</span>
+            </div>
+            <div class="hp-bar-track">
+              <div id="hp-bar" class="hp-bar-fill" style="width: 100%"></div>
+            </div>
+          </div>
+
+          <div id="status" class="status-grid"></div>
+        </section>
+
+        <section class="panel map-panel">
+          <div class="panel-head">
+            <span class="panel-icon" aria-hidden="true">🗺</span>
+            <h2 id="map-title">第 1 層 小地圖</h2>
+          </div>
+
+          <div class="map-wrapper">
+            <div class="map-axis-top">
+              <span></span><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span>
+            </div>
+            <div class="map-body">
+              <div class="map-axis-left" id="map-axis-left"></div>
+              <div id="map" class="map-grid" role="grid" aria-label="地牢地圖"></div>
+            </div>
+          </div>
+
+          <div class="map-legend">
+            <span class="legend-item"><i class="sym player">P</i>玩家</span>
+            <span class="legend-item"><i class="sym unknown">?</i>未知</span>
+            <span class="legend-item"><i class="sym wall">X</i>巨石</span>
+            <span class="legend-item"><i class="sym stairs-down">v</i>下樓</span>
+            <span class="legend-item"><i class="sym stairs-up">^</i>上樓</span>
+            <span class="legend-item"><i class="sym boss">B</i>BOSS</span>
+            <span class="legend-item"><i class="sym potion">+</i>道具</span>
+            <span class="legend-item"><i class="sym chest">T</i>寶箱</span>
+            <span class="legend-item"><i class="sym rest">R</i>休息</span>
+            <span class="legend-item"><i class="sym start">S</i>起點</span>
+          </div>
+        </section>
+
+        <section class="panel controls-panel">
+          <div class="panel-head">
+            <span class="panel-icon" aria-hidden="true">🎮</span>
+            <h2>操作</h2>
+          </div>
+
+          <div class="dpad">
+            <button class="btn move-btn" data-dir="up" title="向北移動 (W / ↑)">
+              <span class="btn-arrow">↑</span>
+            </button>
+            <button class="btn move-btn" data-dir="left" title="向西移動 (A / ←)">
+              <span class="btn-arrow">←</span>
+            </button>
+            <button class="btn move-btn" data-dir="down" title="向南移動 (S / ↓)">
+              <span class="btn-arrow">↓</span>
+            </button>
+            <button class="btn move-btn" data-dir="right" title="向東移動 (D / →)">
+              <span class="btn-arrow">→</span>
+            </button>
+          </div>
+
+          <div class="action-buttons">
+            <button class="btn action-btn" data-action="look" title="L">
+              <span class="action-name">觀察</span><kbd>L</kbd>
+            </button>
+            <button class="btn action-btn combat" data-action="kill" title="K">
+              <span class="action-name">攻擊</span><kbd>K</kbd>
+            </button>
+            <button class="btn action-btn" data-action="enter" title="I">
+              <span class="action-name">進入</span><kbd>I</kbd>
+            </button>
+            <button class="btn action-btn heal" data-action="potion" title="E">
+              <span class="action-name">道具</span><kbd>E</kbd>
+            </button>
+            <button class="btn action-btn heal" data-action="rest" title="H">
+              <span class="action-name">休息</span><kbd>H</kbd>
+            </button>
+            <button class="btn action-btn" data-action="map" title="M">
+              <span class="action-name">地圖</span><kbd>M</kbd>
+            </button>
+          </div>
+
+          <p class="hint">
+            <span class="hint-chip">方向鍵</span>
+            <span class="hint-chip">WASD</span>
+            移動 ·
+            <span class="hint-chip">Q</span>
+            離開
+          </p>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="footer">
+      <span>基於 game.c 移植 · 純前端網頁版</span>
+    </footer>
+  </div>
+
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal boss-modal" role="dialog" aria-labelledby="modal-title">
+      <div class="modal-glow"></div>
+      <div class="modal-icon" aria-hidden="true">☠</div>
+      <h3 id="modal-title">危險警告</h3>
+      <p>前方房間散發著毀滅性的暗紅氣息，令人窒息！</p>
+      <p>你感覺到一股遠超先前三層怪物的恐怖力量——這是 BOSS 的巢穴。</p>
+      <p class="modal-warn">一旦進入，將無法輕易撤退。</p>
+      <div class="modal-actions">
+        <button id="modal-yes" class="btn btn-danger">進入決戰 <kbd>Y</kbd></button>
+        <button id="modal-no" class="btn btn-ghost">再準備一下 <kbd>N</kbd></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="end-overlay" class="modal-overlay hidden">
+    <div class="modal end-modal">
+      <div class="modal-glow"></div>
+      <div id="end-icon" class="modal-icon" aria-hidden="true"></div>
+      <h3 id="end-title"></h3>
+      <p id="end-message"></p>
+      <button id="restart-btn" class="btn btn-primary">重新冒險</button>
+    </div>
+  </div>
+
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
