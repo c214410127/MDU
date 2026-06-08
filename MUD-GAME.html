@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>四層地牢 MUD - DOS RPG Edition</title>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --text-color: #c0c0c0;
+            --border-color: #aaaaaa;
+            --highlight: #ffffff;
+            --danger: #ff5555;
+            --success: #55ff55;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Courier New', 'Consolas', 'MingLiU', '細明體', monospace;
+            font-size: 14px;
+            font-weight: bold;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            line-height: 1.5;
+        }
+
+        #game-container {
+            display: flex;
+            gap: 20px;
+            width: 960px;
+            max-width: 100%;
+        }
+
+        #left-panel {
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .panel {
+            border: 2px solid var(--border-color);
+            padding: 15px;
+            background: #111;
+        }
+
+        .panel-title {
+            color: var(--highlight);
+            text-align: center;
+            margin-bottom: 15px;
+            border-bottom: 1px dashed var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        #map-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 5px;
+            text-align: center;
+            font-size: 20px;
+        }
+
+        .map-cell {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #222;
+            border: 1px solid #444;
+        }
+
+        #right-panel {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        #viewport {
+            height: 250px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            background-color: #000;
+            transition: background-color 0.8s ease;
+        }
+
+        #room-bg {
+            position: absolute;
+            font-size: 160px;
+            opacity: 0.15;
+            z-index: 0;
+            user-select: none;
+            filter: grayscale(50%);
+        }
+
+        #room-items {
+            position: absolute;
+            top: 55%;
+            font-size: 40px;
+            display: flex;
+            gap: 20px;
+            z-index: 1;
+        }
+
+        .item-bounce {
+            animation: itemBounce 1.5s infinite ease-in-out;
+            cursor: default;
+        }
+
+        @keyframes itemBounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        #monster-img {
+            max-height: 150px;
+            display: none;
+            transition: transform 0.1s;
+            z-index: 2;
+        }
+
+        @keyframes attackShake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); filter: brightness(200%) sepia(100%) hue-rotate(300deg) saturate(300%); }
+        }
+
+        .shake { animation: attackShake 0.4s; }
+
+        @keyframes damageFlash {
+            0% { filter: brightness(100%) hue-rotate(0deg); }
+            50% { filter: brightness(150%) hue-rotate(-50deg) sepia(100%) saturate(500%); background-color: #500; }
+            100% { filter: brightness(100%) hue-rotate(0deg); }
+        }
+
+        .flash-red { animation: damageFlash 0.3s; }
+
+        #log {
+            height: 300px;
+            overflow-y: auto;
+            background: #000;
+            border: 2px solid var(--border-color);
+            padding: 10px;
+            white-space: pre-wrap;
+        }
+
+        #controls {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        button {
+            background: #000;
+            color: var(--text-color);
+            border: 2px solid var(--border-color);
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: bold;
+            padding: 10px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background: var(--text-color);
+            color: var(--bg-color);
+        }
+
+        .hp-bar {
+            width: 100%;
+            background: #333;
+            height: 10px;
+            margin-top: 5px;
+        }
+
+        .hp-fill {
+            background: var(--danger);
+            height: 100%;
+            width: 100%;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="left-panel">
+        <div class="panel">
+            <div class="panel-title">裝備與狀態</div>
+            <div>[ 裝備欄 ]</div>
+            <div style="margin-top:5px; color:#aaa;">武器: <span id="ui-weapon" style="color:var(--highlight)">-</span></div>
+            <div style="margin-top:5px; color:#aaa;">防具: <span id="ui-armor" style="color:var(--highlight)">-</span></div>
+            <div style="margin-top:5px; color:#aaa;">道具: &#129514; x<span id="ui-potions">0</span></div>
+            <hr style="border-color:#444; margin:15px 0;">
+            <div>[ 能力值 ]</div>
+            <div style="margin-top:5px;">ATK: <span id="ui-atk">0</span></div>
+            <div style="margin-top:5px;">DEF: <span id="ui-def">0</span></div>
+            <div style="margin-top:15px;">HP: <span id="ui-hp">0</span>/<span id="ui-max-hp">0</span></div>
+            <div class="hp-bar"><div id="ui-hp-fill" class="hp-fill" style="width:0%"></div></div>
+            <div style="margin-top:10px; color:var(--success);">樓層: <span id="ui-floor">1</span>F</div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title">雷達地圖</div>
+            <div id="map-grid"></div>
+            <div style="margin-top: 15px; font-size: 12px; line-height: 1.8; color: #888;">
+                圖例：<br>
+                &#129497;=勇者 &#129704;=岩石 &#128293;=營火<br>
+                &#9978;=起點 &#127873;=寶箱 &#129514;=道具<br>
+                &#128317;=下樓 &#128316;=上樓 &#9934;=BOSS<br>
+                ?=未知 &middot;=空地
+            </div>
+        </div>
+    </div>
+
+    <div id="right-panel">
+        <div id="viewport" class="panel">
+            <div id="room-bg"></div>
+            <div id="room-items"></div>
+            
+            <div id="room-title" style="position:absolute; top:15px; color:var(--highlight); z-index: 3;">讀取中...</div>
+            <img id="monster-img" alt="Monster">
+            <div id="monster-hp-container" style="display:none; position:absolute; bottom:15px; width:80%; text-align:center; z-index: 3;">
+                <div id="monster-name">讀取中</div>
+                <div class="hp-bar" style="height:5px;"><div id="monster-hp-fill" class="hp-fill"></div></div>
+            </div>
+        </div>
+
+        <div id="log">系統啟動中...</div>
+
+        <div id="controls">
+            <button onclick="handleInput('w')">W 向上</button>
+            <button onclick="handleInput('a')">A 向左</button>
+            <button onclick="handleInput('s')">S 向下</button>
+            <button onclick="handleInput('d')">D 向右</button>
+            <button onclick="handleInput('l')">L 觀察</button>
+            <button onclick="handleInput('k')">K 攻擊</button>
+            <button onclick="handleInput('i')">I 樓梯</button>
+            <button onclick="handleInput('e')">E 吃藥</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// 核彈級除錯防護罩，只要崩潰直接覆蓋整個畫面
+try {
+    const MAP_SIZE = 5;
+    const NUM_FLOORS = 4;
+    const MAX_HP = 100;
+    const BOSS_HP = 270;
+    const POTION_HEAL = 50;
+
+    const RT = { START: 0, FOREST: 1, CAVE: 2, WASTELAND: 3, REST: 4, WALL: 5, STAIRS_DOWN: 6, STAIRS_UP: 7, BOSS_GATE: 8, BOSS: 9 };
+
+    // 1. 預先分配 100% 完整的陣列記憶體結構，根絕所有 undefined
+    let floors = [];
+    let explored = [];
+    let wallKnown = [];
+
+    for (let f = 0; f < NUM_FLOORS; f++) {
+        floors[f] = [];
+        explored[f] = [];
+        wallKnown[f] = [];
+        for (let y = 0; y < MAP_SIZE; y++) {
+            floors[f][y] = [];
+            explored[f][y] = [];
+            wallKnown[f][y] = [];
+            for (let x = 0; x < MAP_SIZE; x++) {
+                floors[f][y][x] = { type: RT.FOREST, hasMonster: false, monsterHp: 0, monsterMaxHp: 0, isBoss: false, hasChest: false, chestOpened: false, hasPotion: false, monsterName: "" };
+                explored[f][y][x] = false;
+                wallKnown[f][y][x] = false;
+            }
+        }
+    }
+
+    let player = { x: 2, y: 2, hp: MAX_HP, max_hp: MAX_HP, atk: 15, def: 0, potions: 0, weapon: "拳腳", armor: "布衣" };
+    let currentFloor = 0;
+    let gameWon = false;
+    let stairsDownPos = [[0,0], [0,0], [0,0], [0,0]];
+
+    function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+    function randPercent() { return Math.floor(Math.random() * 100); }
+    function curRoom() { return floors[currentFloor][player.y][player.x]; }
+
+    function logMsg(msg, color) {
+        let logBox = document.getElementById("log");
+        if (!logBox) return;
+        if (logBox.innerHTML.includes("系統啟動中...")) logBox.innerHTML = "";
+        let span = document.createElement("span");
+        span.innerHTML = msg + "<br>";
+        if (color) span.style.color = color;
+        logBox.appendChild(span);
+        logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function assignMonster(room) {
+        let forest = ["哥布林", "野狼", "樹妖", "沼澤蛙人"];
+        let cave = ["地底蜘蛛", "蝙蝠群", "石像鬼", "洞穴蜥蜴"];
+        let waste = ["枯骨兵", "沙蠍", "荒漠盜匪", "腐屍獸"];
+        if (room.isBoss) { room.monsterName = "遠古魔王"; return; }
+        if (room.type === RT.FOREST) room.monsterName = forest[rand(0, 3)];
+        else if (room.type === RT.CAVE) room.monsterName = cave[rand(0, 3)];
+        else if (room.type === RT.WASTELAND) room.monsterName = waste[rand(0, 3)];
+        else room.monsterName = "未知魔物";
+    }
+
+    function randomTerrain() {
+        let roll = rand(0, 9);
+        if (roll < 3) return RT.FOREST;
+        if (roll < 6) return RT.CAVE;
+        if (roll < 8) return RT.WASTELAND;
+        return RT.REST;
+    }
+
+    function getEdgeCells(f, excludeX, excludeY) {
+        let cells = [];
+        for (let y = 0; y < MAP_SIZE; y++) {
+            for (let x = 0; x < MAP_SIZE; x++) {
+                if (x === 0 || x === MAP_SIZE - 1 || y === 0 || y === MAP_SIZE - 1) {
+                    if (floors[f][y][x].type !== RT.WALL && (x !== excludeX || y !== excludeY)) {
+                        cells.push([x, y]);
+                    }
+                }
+            }
+        }
+        return cells;
+    }
+
+    function ensureStairPassage(f, sx, sy) {
+        floors[f][sy][sx].hasMonster = false;
+        let dx = [-1, 1, 0, 0], dy = [0, 0, -1, 1];
+        for (let i = 0; i < 4; i++) {
+            let x = sx + dx[i], y = sy + dy[i];
+            if (x >= 0 && x < MAP_SIZE && y >= 0 && y < MAP_SIZE) {
+                if (floors[f][y][x].type === RT.WALL) floors[f][y][x].type = randomTerrain();
+                floors[f][y][x].hasMonster = false;
+            }
+        }
+    }
+
+    // 2. 修改生成邏輯，只覆寫屬性，不破壞陣列結構
+    function generateFloor(f, startX, startY, startType) {
+        floors[f][startY][startX].type = startType;
+        for (let y = 0; y < MAP_SIZE; y++) {
+            for (let x = 0; x < MAP_SIZE; x++) {
+                if (x === startX && y === startY) continue;
+                floors[f][y][x].type = (randPercent() < 15) ? RT.WALL : randomTerrain();
+                if (floors[f][y][x].type !== RT.WALL && floors[f][y][x].type !== RT.REST && randPercent() < 40) {
+                    floors[f][y][x].hasMonster = true;
+                    floors[f][y][x].monsterMaxHp = floors[f][y][x].monsterHp = rand(20, 40);
+                    assignMonster(floors[f][y][x]);
+                }
+            }
+        }
+    }
+
+    function initWorld() {
+        generateFloor(0, 2, 2, RT.START);
+        let edges1 = getEdgeCells(0, -1, -1);
+        if (edges1.length > 0) {
+            floors[0][edges1[0][1]][edges1[0][0]].hasChest = true;
+            let edges2 = getEdgeCells(0, edges1[0][0], edges1[0][1]);
+            if (edges2.length > 0) {
+                let sx = edges2[0][0], sy = edges2[0][1];
+                floors[0][sy][sx].type = RT.STAIRS_DOWN;
+                floors[0][sy][sx].hasMonster = false;
+                stairsDownPos[0] = [sx, sy];
+                ensureStairPassage(0, sx, sy);
+            }
+        }
+
+        let ux1 = stairsDownPos[0][0], uy1 = stairsDownPos[0][1];
+        generateFloor(1, ux1, uy1, RT.STAIRS_UP);
+        ensureStairPassage(1, ux1, uy1);
+        
+        let emptyCells = [];
+        for (let y = 0; y < MAP_SIZE; y++) {
+            for (let x = 0; x < MAP_SIZE; x++) {
+                if (floors[1][y][x].type !== RT.WALL && floors[1][y][x].type !== RT.STAIRS_UP && floors[1][y][x].type !== RT.REST && (x !== ux1 || y !== uy1)) {
+                    emptyCells.push([x, y]);
+                }
+            }
+        }
+        for (let i = 0; i < 2 && emptyCells.length > 0; i++) {
+            let idx = rand(0, emptyCells.length - 1);
+            let px = emptyCells[idx][0], py = emptyCells[idx][1];
+            floors[1][py][px].hasPotion = true;
+            floors[1][py][px].hasMonster = false;
+            emptyCells.splice(idx, 1);
+        }
+        let edgesF2 = getEdgeCells(1, ux1, uy1);
+        if (edgesF2.length > 0) {
+            let sx = edgesF2[0][0], sy = edgesF2[0][1];
+            floors[1][sy][sx].type = RT.STAIRS_DOWN;
+            floors[1][sy][sx].hasMonster = false;
+            stairsDownPos[1] = [sx, sy];
+            ensureStairPassage(1, sx, sy);
+        }
+
+        let ux2 = stairsDownPos[1][0], uy2 = stairsDownPos[1][1];
+        generateFloor(2, ux2, uy2, RT.STAIRS_UP);
+        ensureStairPassage(2, ux2, uy2);
+        let edgesF3 = getEdgeCells(2, ux2, uy2);
+        let bx = edgesF3.length > 0 ? edgesF3[0][0] : ((ux2 === 0) ? MAP_SIZE - 1 : 0);
+        let by = edgesF3.length > 0 ? edgesF3[0][1] : uy2;
+        floors[2][by][bx].type = RT.BOSS_GATE;
+        floors[2][by][bx].hasMonster = false;
+        stairsDownPos[2] = [bx, by];
+        ensureStairPassage(2, bx, by);
+
+        let ux3 = stairsDownPos[2][0], uy3 = stairsDownPos[2][1];
+        // 第四層特殊處理
+        for (let y = 0; y < MAP_SIZE; y++) {
+            for (let x = 0; x < MAP_SIZE; x++) {
+                floors[3][y][x].type = RT.WALL;
+            }
+        }
+        floors[3][uy3][ux3].type = RT.STAIRS_UP;
+        ensureStairPassage(3, ux3, uy3);
+        
+        let cx = ux3, cy = uy3;
+        let antiLoop = 0;
+        while ((cx !== 2 || cy !== 2) && antiLoop < 20) {
+            if (cx !== 2) cx += (2 > cx) ? 1 : -1;
+            else cy += (2 > cy) ? 1 : -1;
+            floors[3][cy][cx].type = RT.CAVE;
+            antiLoop++;
+        }
+        floors[3][2][2].type = RT.BOSS;
+        floors[3][2][2].hasMonster = true;
+        floors[3][2][2].isBoss = true;
+        floors[3][2][2].monsterMaxHp = floors[3][2][2].monsterHp = BOSS_HP;
+        assignMonster(floors[3][2][2]);
+    }
+
+    function getMapSymbol(x, y) {
+        if (x === player.x && y === player.y) return "&#129497;";
+        let r = floors[currentFloor][y][x];
+        let exp = explored[currentFloor][y][x];
+        let wk = wallKnown[currentFloor][y][x];
+
+        if (r.type === RT.WALL) return (wk || exp) ? "&#129704;" : "?";
+        if (!exp && !wk) return "?";
+        if (r.type === RT.STAIRS_DOWN) return "&#128317;";
+        if (r.type === RT.STAIRS_UP) return "&#128316;";
+        if (r.type === RT.BOSS_GATE || (r.type === RT.BOSS && r.hasMonster)) return "&#9934;";
+        if (r.type === RT.START) return "&#9978;";
+        if (r.type === RT.REST) return "&#128293;";
+        if (r.hasChest && !r.chestOpened) return "&#127873;";
+        if (r.hasPotion) return "&#129514;";
+        return "&middot;";
+    }
+
+    function updateMap() {
+        let grid = document.getElementById("map-grid");
+        grid.innerHTML = "";
+        for (let y = 0; y < MAP_SIZE; y++) {
+            for (let x = 0; x < MAP_SIZE; x++) {
+                let div = document.createElement("div");
+                div.className = "map-cell";
+                div.innerHTML = getMapSymbol(x, y);
+                grid.appendChild(div);
+            }
+        }
+    }
+
+    function updateViewport() {
+        let room = curRoom();
+        let vp = document.getElementById("viewport");
+        
+        let titles = ["起點營地", "迷霧森林", "鐘乳石洞", "荒涼廢土", "營火休息區", "崩塌岩壁", "深淵樓梯", "向上樓梯", "魔王門扉", "遠古殿堂"];
+        let bgColors = ["#05050a", "#001a05", "#111111", "#1a1000", "#1a0500", "#222222", "#00001a", "#05051a", "#2a0000", "#330000"];
+        let bgMap = ["&#9978;", "&#127794;", "&#128378;", "&#127964;", "&#128293;", "&#129704;", "&#128371;", "&#129644;", "&#9934;", "&#128128;"];
+        
+        vp.style.backgroundColor = bgColors[room.type] || "#000";
+        document.getElementById("room-title").innerText = titles[room.type] || "未知";
+        document.getElementById("room-bg").innerHTML = bgMap[room.type] || "";
+
+        let itemsHTML = "";
+        if (room.hasChest) {
+            if (!room.chestOpened) itemsHTML += "<div class='item-bounce'>&#127873;</div>";
+            else itemsHTML += "<div style='opacity: 0.3;'>&#127873;</div>";
+        }
+        if (room.hasPotion) itemsHTML += "<div class='item-bounce'>&#129514;</div>";
+        document.getElementById("room-items").innerHTML = itemsHTML;
+
+        let mImg = document.getElementById("monster-img");
+        let mHpBox = document.getElementById("monster-hp-container");
+        
+        if (room.hasMonster) {
+            mImg.style.display = "block";
+            mImg.src = "https://robohash.org/" + encodeURIComponent(room.monsterName) + "?set=set2&size=150x150";
+            mHpBox.style.display = "block";
+            document.getElementById("monster-name").innerText = room.monsterName;
+            document.getElementById("monster-hp-fill").style.width = (room.monsterHp / room.monsterMaxHp * 100) + "%";
+        } else {
+            mImg.style.display = "none";
+            mHpBox.style.display = "none";
+        }
+    }
+
+    function updateUI() {
+        document.getElementById("ui-weapon").innerText = player.weapon;
+        document.getElementById("ui-armor").innerText = player.armor;
+        document.getElementById("ui-potions").innerText = player.potions;
+        document.getElementById("ui-atk").innerText = player.atk;
+        document.getElementById("ui-def").innerText = player.def;
+        document.getElementById("ui-hp").innerText = player.hp;
+        document.getElementById("ui-max-hp").innerText = player.max_hp;
+        document.getElementById("ui-hp-fill").style.width = (player.hp / player.max_hp * 100) + "%";
+        document.getElementById("ui-floor").innerText = currentFloor + 1;
+        updateMap();
+        updateViewport();
+    }
+
+    function revealAdjacentWalls() {
+        let dx = [0, 0, 1, -1], dy = [-1, 1, 0, 0];
+        for (let i = 0; i < 4; i++) {
+            let nx = player.x + dx[i], ny = player.y + dy[i];
+            if (nx >= 0 && nx < MAP_SIZE && ny >= 0 && ny < MAP_SIZE) {
+                if (floors[currentFloor][ny][nx].type === RT.WALL) wallKnown[currentFloor][ny][nx] = true;
+            }
+        }
+    }
+
+    function onEnterRoom() {
+        explored[currentFloor][player.y][player.x] = true;
+        revealAdjacentWalls();
+        
+        let room = curRoom();
+        logMsg("你來到了新區域...", "var(--highlight)");
+        
+        if (room.hasChest && !room.chestOpened) {
+            let weapons = ["生鏽短劍", "獵人短弓", "鋼鐵長刀", "符文匕首"];
+            let armors = ["皮革護胸", "鍊甲背心", "山民斗篷", "古舊盾甲"];
+            player.atk += rand(8, 12); player.def += rand(5, 8);
+            player.weapon = weapons[rand(0, 3)]; player.armor = armors[rand(0, 3)];
+            room.chestOpened = true;
+            logMsg("發現寶箱！獲得【" + player.weapon + "】與【" + player.armor + "】！", "var(--success)");
+        }
+        if (room.hasPotion) {
+            room.hasPotion = false;
+            player.potions++;
+            logMsg("發現一瓶回血藥劑！(持有 " + player.potions + " 瓶)", "var(--success)");
+        }
+        if (room.hasMonster) {
+            logMsg("【" + room.monsterName + "】擋住了去路！", "var(--danger)");
+        }
+        updateUI();
+    }
+
+    window.tryMove = function(dx, dy) {
+        if (player.hp <= 0 || gameWon) return;
+        let room = curRoom();
+        if (room.hasMonster) { logMsg("怪物擋住了去路！請先攻擊(K)", "var(--danger)"); return; }
+        let nx = player.x + dx, ny = player.y + dy;
+        if (nx < 0 || nx >= MAP_SIZE || ny < 0 || ny >= MAP_SIZE) { logMsg("前方是地圖邊界。"); return; }
+        if (floors[currentFloor][ny][nx].type === RT.WALL) {
+            wallKnown[currentFloor][ny][nx] = true;
+            logMsg("前方是崩塌的岩石，無法通行！");
+            updateUI();
+            return;
+        }
+        player.x = nx; player.y = ny;
+        onEnterRoom();
+    };
+
+    window.cmdAttack = function() {
+        if (player.hp <= 0 || gameWon) return;
+        let room = curRoom();
+        if (!room.hasMonster) { logMsg("這裡沒有怪物。"); return; }
+
+        let img = document.getElementById("monster-img");
+        img.classList.remove("shake");
+        void img.offsetWidth;
+        img.classList.add("shake");
+
+        room.monsterHp -= player.atk;
+        logMsg("你攻擊造成 " + player.atk + " 點傷害！");
+
+        if (room.monsterHp <= 0) {
+            room.hasMonster = false;
+            if (room.isBoss) {
+                gameWon = true;
+                logMsg("打倒了遠古魔王！恭喜通關！", "var(--success)");
+            } else {
+                logMsg("怪物倒下了！");
+            }
+            updateUI();
+            return;
+        }
+
+        let dmg = Math.max(1, (room.isBoss ? rand(16, 24) : rand(5, 15)) - player.def);
+        player.hp -= dmg;
+        
+        let vp = document.getElementById("viewport");
+        vp.classList.remove("flash-red");
+        void vp.offsetWidth;
+        vp.classList.add("flash-red");
+
+        logMsg("怪物反擊！造成 " + dmg + " 點傷害！", "var(--danger)");
+        if (player.hp <= 0) { player.hp = 0; logMsg("你已力竭倒下...", "var(--danger)"); }
+        updateUI();
+    };
+
+    window.cmdStairs = function() {
+        if (player.hp <= 0 || gameWon) return;
+        let room = curRoom();
+        if (room.hasMonster) { logMsg("怪物擋路！"); return; }
+        if (room.type === RT.STAIRS_DOWN) {
+            currentFloor++; logMsg("來到了下層！", "var(--highlight)"); onEnterRoom();
+        } else if (room.type === RT.STAIRS_UP) {
+            currentFloor--; logMsg("回到了上層！", "var(--highlight)"); onEnterRoom();
+        } else if (room.type === RT.BOSS_GATE) {
+            if(confirm("確定進入 BOSS 房間嗎？將無法後退！")) {
+                currentFloor++; logMsg("踏入決戰之地！", "var(--danger)"); onEnterRoom();
+            }
+        } else { logMsg("這裡沒有通道。"); }
+    };
+
+    window.cmdHeal = function() {
+        if (player.hp <= 0 || gameWon) return;
+        let room = curRoom();
+        if (room.type === RT.REST) {
+            if (player.hp >= player.max_hp) return;
+            let heal = rand(20, 35);
+            player.hp = Math.min(player.max_hp, player.hp + heal);
+            logMsg("營火休息恢復了 " + heal + " 點 HP！", "var(--success)");
+            updateUI();
+        } else {
+            if (player.potions <= 0 || player.hp >= player.max_hp) return;
+            player.potions--;
+            player.hp = Math.min(player.max_hp, player.hp + POTION_HEAL);
+            logMsg("喝下藥劑恢復 " + POTION_HEAL + " 點 HP！", "var(--success)");
+            updateUI();
+        }
+    };
+
+    window.cmdLook = function() { logMsg("你環顧四周..."); };
+
+    window.handleInput = function(key) {
+        switch(key.toLowerCase()) {
+            case 'w': tryMove(0, -1); break;
+            case 's': tryMove(0, 1); break;
+            case 'a': tryMove(-1, 0); break;
+            case 'd': tryMove(1, 0); break;
+            case 'l': cmdLook(); break;
+            case 'k': cmdAttack(); break;
+            case 'i': cmdStairs(); break;
+            case 'e': cmdHeal(); break;
+        }
+    };
+
+    document.addEventListener("keydown", function(e) {
+        let keyMap = { ArrowUp: 'w', ArrowDown: 's', ArrowLeft: 'a', ArrowRight: 'd' };
+        let key = keyMap[e.key] || e.key;
+        if(['w','a','s','d','l','k','i','e'].includes(key.toLowerCase())) {
+            handleInput(key);
+        }
+    });
+
+    // 啟動指令
+    initWorld();
+    explored[0][2][2] = true;
+    revealAdjacentWalls();
+    logMsg("★ 系統啟動成功 ★", "var(--success)");
+    logMsg("使用鍵盤 W/A/S/D 移動，L/K/I/E 操作。", "var(--highlight)");
+    updateUI();
+
+} catch (e) {
+    // 終極錯誤攔截，如果失敗直接蓋台
+    document.body.innerHTML = `
+        <div style="background: #111; border: 2px solid #ff5555; padding: 20px; color: #fff; max-width: 800px; margin: 50px auto; font-family: monospace;">
+            <h1 style="color: #ff5555; margin-top: 0;">🚨 致命錯誤 (Fatal Error)</h1>
+            <p>遊戲引擎在啟動時崩潰了。請將以下紅色文字截圖給我看，我馬上能抓到蟲：</p>
+            <hr style="border-color: #444;">
+            <h2 style="color: #ff5555;">${e.name}: ${e.message}</h2>
+            <pre style="color: #aaa; overflow-x: auto; font-size: 14px;">${e.stack}</pre>
+        </div>
+    `;
+}
+</script>
+</body>
+</html>
